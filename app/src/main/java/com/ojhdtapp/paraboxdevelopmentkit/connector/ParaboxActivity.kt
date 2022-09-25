@@ -4,7 +4,6 @@ import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
 import android.os.*
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.CompletableDeferred
@@ -70,9 +69,7 @@ abstract class ParaboxActivity<T>(private val serviceClass: Class<T>) : Componen
                     val deferred = CompletableDeferred<ParaboxResult>()
                     deferredMap[timestamp] = deferred
                     coreSendCommand(timestamp, command, extra)
-                    Log.d("parabox", "command sent")
                     deferred.await().also {
-                        Log.d("parabox", "successfully complete")
                         onResult(it)
                     }
                 }
@@ -178,7 +175,6 @@ abstract class ParaboxActivity<T>(private val serviceClass: Class<T>) : Componen
             }).apply {
             replyTo = client
         }
-        Log.d("parabox", "send back to service")
         paraboxService?.send(msg)
 
     }
@@ -204,7 +200,6 @@ abstract class ParaboxActivity<T>(private val serviceClass: Class<T>) : Componen
             val obj = msg.obj as Bundle
             when (msg.arg2) {
                 ParaboxKey.TYPE_REQUEST -> {
-                    Log.d("parabox", "request received")
                     lifecycleScope.launch {
                         try {
                             obj.classLoader = ParaboxMetadata::class.java.classLoader
@@ -224,7 +219,6 @@ abstract class ParaboxActivity<T>(private val serviceClass: Class<T>) : Componen
                             }
 
                             deferred.await().also {
-                                Log.d("parabox", "first deferred completed")
                                 val resObj = if (it is ParaboxResult.Success) {
                                     it.obj
                                 } else Bundle()
@@ -266,7 +260,6 @@ abstract class ParaboxActivity<T>(private val serviceClass: Class<T>) : Componen
                                 errorCode = errorCode
                             )
                         }
-                        Log.d("parabox", "try complete second deferred")
                         deferredMap[metadata.timestamp]?.complete(result)
                     } catch (e: NullPointerException) {
                         e.printStackTrace()
@@ -276,6 +269,7 @@ abstract class ParaboxActivity<T>(private val serviceClass: Class<T>) : Componen
                 }
 
                 ParaboxKey.TYPE_NOTIFICATION -> {
+                    val timestamp = obj.getLong("timestamp")
                     when (msg.what) {
                         ParaboxKey.NOTIFICATION_STATE_UPDATE -> {
                             val state = obj.getInt("state", ParaboxKey.STATE_ERROR)

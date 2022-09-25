@@ -2,7 +2,6 @@ package com.ojhdtapp.paraboxdevelopmentkit.connector
 
 import android.content.Intent
 import android.os.*
-import android.util.Log
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.ojhdtapp.paraboxdevelopmentkit.messagedto.ReceiveMessageDto
@@ -125,7 +124,6 @@ abstract class ParaboxService : LifecycleService() {
                 } else {
                     messageUnreceivedMap.remove(dto.messageId!!)
                 }
-                Log.d("parabox", "unreceived size: ${messageUnreceivedMap.size}")
             })
     }
 
@@ -207,7 +205,6 @@ abstract class ParaboxService : LifecycleService() {
         extra: Bundle = Bundle(),
         errorCode: Int? = null
     ) {
-        Log.d("parabox", "before try sending result")
         if (isSuccess) {
             ParaboxResult.Success(
                 command = metadata.commandOrRequest,
@@ -221,7 +218,6 @@ abstract class ParaboxService : LifecycleService() {
                 errorCode = errorCode!!
             )
         }.also {
-            Log.d("parabox", "try sending result")
             deferredMap[metadata.timestamp]?.complete(it)
 //            coreSendCommandResponse(isSuccess, metadata, it)
         }
@@ -251,7 +247,6 @@ abstract class ParaboxService : LifecycleService() {
                         }).apply {
                         replyTo = paraboxMessenger
                     }
-                    Log.d("parabox", "send back to main app")
                     mainAppMessenger?.send(msg)
                 }
 
@@ -271,7 +266,6 @@ abstract class ParaboxService : LifecycleService() {
                         }).apply {
                         replyTo = paraboxMessenger
                     }
-                    Log.d("parabox", "send back to activity")
                     clientMessenger?.send(msg)
                 }
             }
@@ -295,7 +289,6 @@ abstract class ParaboxService : LifecycleService() {
                     deferredMap[timestamp] = deferred
                     coreSendRequest(timestamp, request, client, extra)
                     deferred.await().also {
-                        Log.d("parabox", "deferred complete successfully")
                         onResult(it)
                     }
                 }
@@ -327,15 +320,12 @@ abstract class ParaboxService : LifecycleService() {
         client: Int,
         extra: Bundle = Bundle()
     ) {
-        Log.d("parabox", "client: $client")
-        Log.d("parabox", "currentMessengers: $clientMessenger, $mainAppMessenger")
         val targetClient = when (client) {
             ParaboxKey.CLIENT_CONTROLLER -> clientMessenger
             ParaboxKey.CLIENT_MAIN_APP -> mainAppMessenger
             else -> null
         }
         if (targetClient == null) {
-            Log.d("parabox", "client is null")
             deferredMap[timestamp]?.complete(
                 ParaboxResult.Fail(
                     request, timestamp,
@@ -354,9 +344,7 @@ abstract class ParaboxService : LifecycleService() {
             }).apply {
                 replyTo = paraboxMessenger
             }
-            Log.d("parabox", "request is not null")
             targetClient.send(msg)
-            Log.d("parabox", "request sent")
         }
     }
 
@@ -377,8 +365,6 @@ abstract class ParaboxService : LifecycleService() {
 
     inner class CommandHandler : Handler(Looper.getMainLooper()) {
         override fun handleMessage(msg: Message) {
-            Log.d("parabox", "whatever msg coming with arg1: ${msg.arg1}")
-            // 客户端类型判断
             when (msg.arg1) {
                 ParaboxKey.CLIENT_CONTROLLER -> {
                     clientMessenger = msg.replyTo
@@ -446,7 +432,6 @@ abstract class ParaboxService : LifecycleService() {
                                 else -> customHandleMessage(msg, metadata)
                             }
                             deferred.await().also {
-                                Log.d("parabox", "first deferred complete")
                                 val resObj = if (it is ParaboxResult.Success) {
                                     it.obj
                                 } else Bundle()
@@ -490,7 +475,6 @@ abstract class ParaboxService : LifecycleService() {
                                 errorCode = errorCode
                             )
                         }
-                        Log.d("parabox", "tr complete second deferred")
                         deferredMap[metadata.timestamp]?.complete(result)
                     } catch (e: NullPointerException) {
                         e.printStackTrace()
