@@ -13,7 +13,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 
 abstract class ParaboxService : LifecycleService() {
-    var serviceState = ParaboxKey.STATE_STOP
+    private var serviceState = ParaboxKey.STATE_STOP
     lateinit var paraboxMessenger: Messenger
     private var clientMessenger: Messenger? = null
     private var mainAppMessenger: Messenger? = null
@@ -29,6 +29,9 @@ abstract class ParaboxService : LifecycleService() {
     abstract suspend fun onRecallMessage(messageId: Long): Boolean
     abstract fun onRefreshMessage()
     abstract fun onMainAppLaunch()
+
+    fun getServiceState(): Int = serviceState
+
     fun startParabox(metadata: ParaboxMetadata) {
         if (serviceState in listOf<Int>(ParaboxKey.STATE_STOP, ParaboxKey.STATE_ERROR)) {
             onStartParabox()
@@ -101,8 +104,12 @@ abstract class ParaboxService : LifecycleService() {
             }).apply {
             replyTo = paraboxMessenger
         }
-        clientMessenger?.send(msg)
-        mainAppMessenger?.send(msg)
+        try {
+            clientMessenger?.send(msg)
+            mainAppMessenger?.send(msg)
+        } catch (e: DeadObjectException) {
+            e.printStackTrace()
+        }
     }
 
     fun receiveMessage(dto: ReceiveMessageDto) {
@@ -226,45 +233,50 @@ abstract class ParaboxService : LifecycleService() {
         result: ParaboxResult,
         extra: Bundle = Bundle()
     ) {
-        when (metadata.sender) {
-            ParaboxKey.CLIENT_MAIN_APP -> {
-                val errorCode = if (!isSuccess) {
-                    (result as ParaboxResult.Fail).errorCode
-                } else 0
-                val msg = Message.obtain(
-                    null,
-                    metadata.commandOrRequest,
-                    ParaboxKey.CLIENT_MAIN_APP,
-                    ParaboxKey.TYPE_COMMAND,
-                    extra.apply {
-                        putBoolean("isSuccess", isSuccess)
-                        putParcelable("metadata", metadata)
-                        putInt("errorCode", errorCode)
-                    }).apply {
-                    replyTo = paraboxMessenger
+        try {
+            when (metadata.sender) {
+                ParaboxKey.CLIENT_MAIN_APP -> {
+                    val errorCode = if (!isSuccess) {
+                        (result as ParaboxResult.Fail).errorCode
+                    } else 0
+                    val msg = Message.obtain(
+                        null,
+                        metadata.commandOrRequest,
+                        ParaboxKey.CLIENT_MAIN_APP,
+                        ParaboxKey.TYPE_COMMAND,
+                        extra.apply {
+                            putBoolean("isSuccess", isSuccess)
+                            putParcelable("metadata", metadata)
+                            putInt("errorCode", errorCode)
+                        }).apply {
+                        replyTo = paraboxMessenger
+                    }
+                    Log.d("parabox", "send back to main app")
+                    mainAppMessenger?.send(msg)
                 }
-                Log.d("parabox", "send back to main app")
-                mainAppMessenger?.send(msg)
-            }
-            ParaboxKey.CLIENT_CONTROLLER -> {
-                val errorCode = if (!isSuccess) {
-                    (result as ParaboxResult.Fail).errorCode
-                } else 0
-                val msg = Message.obtain(
-                    null,
-                    metadata.commandOrRequest,
-                    ParaboxKey.CLIENT_CONTROLLER,
-                    ParaboxKey.TYPE_COMMAND,
-                    extra.apply {
-                        putBoolean("isSuccess", isSuccess)
-                        putParcelable("metadata", metadata)
-                        putInt("errorCode", errorCode)
-                    }).apply {
-                    replyTo = paraboxMessenger
+
+                ParaboxKey.CLIENT_CONTROLLER -> {
+                    val errorCode = if (!isSuccess) {
+                        (result as ParaboxResult.Fail).errorCode
+                    } else 0
+                    val msg = Message.obtain(
+                        null,
+                        metadata.commandOrRequest,
+                        ParaboxKey.CLIENT_CONTROLLER,
+                        ParaboxKey.TYPE_COMMAND,
+                        extra.apply {
+                            putBoolean("isSuccess", isSuccess)
+                            putParcelable("metadata", metadata)
+                            putInt("errorCode", errorCode)
+                        }).apply {
+                        replyTo = paraboxMessenger
+                    }
+                    Log.d("parabox", "send back to activity")
+                    clientMessenger?.send(msg)
                 }
-                Log.d("parabox", "send back to activity")
-                clientMessenger?.send(msg)
             }
+        } catch (e: DeadObjectException) {
+            e.printStackTrace()
         }
     }
 
@@ -409,11 +421,12 @@ abstract class ParaboxService : LifecycleService() {
                                 }
 
                                 ParaboxKey.COMMAND_SEND_MESSAGE -> {
-                                    val dto = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                        obj.getParcelable("dto", SendMessageDto::class.java)!!
-                                    } else {
-                                        obj.getParcelable<SendMessageDto>("dto")!!
-                                    }
+                                    val dto =
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                            obj.getParcelable("dto", SendMessageDto::class.java)!!
+                                        } else {
+                                            obj.getParcelable<SendMessageDto>("dto")!!
+                                        }
                                     sendMessage(metadata, dto)
                                 }
 
@@ -448,7 +461,7 @@ abstract class ParaboxService : LifecycleService() {
                             e.printStackTrace()
                         } catch (e: NullPointerException) {
                             e.printStackTrace()
-                        } catch (e: ClassNotFoundException){
+                        } catch (e: ClassNotFoundException) {
                             e.printStackTrace()
                         }
                     }
@@ -481,14 +494,14 @@ abstract class ParaboxService : LifecycleService() {
                         deferredMap[metadata.timestamp]?.complete(result)
                     } catch (e: NullPointerException) {
                         e.printStackTrace()
-                    } catch (e: ClassNotFoundException){
+                    } catch (e: ClassNotFoundException) {
                         e.printStackTrace()
                     }
 
                 }
 
                 ParaboxKey.TYPE_NOTIFICATION -> {
-                    when(msg.what){
+                    when (msg.what) {
                         ParaboxKey.NOTIFICATION_MAIN_APP_LAUNCH -> {
                             onMainAppLaunch()
                         }
