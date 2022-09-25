@@ -27,7 +27,8 @@ abstract class ParaboxService : LifecycleService() {
     abstract fun customHandleMessage(msg: Message, metadata: ParaboxMetadata)
     abstract suspend fun onSendMessage(dto: SendMessageDto): Boolean
     abstract suspend fun onRecallMessage(messageId: Long): Boolean
-    abstract fun onRefresh()
+    abstract fun onRefreshMessage()
+    abstract fun onMainAppLaunch()
     fun startParabox(metadata: ParaboxMetadata) {
         if (serviceState in listOf<Int>(ParaboxKey.STATE_STOP, ParaboxKey.STATE_ERROR)) {
             onStartParabox()
@@ -173,7 +174,7 @@ abstract class ParaboxService : LifecycleService() {
         }
     }
 
-    private fun getUnreceivedMessage(metadata: ParaboxMetadata) {
+    private fun refreshMessage(metadata: ParaboxMetadata) {
         messageUnreceivedMap.forEach {
             receiveMessage(it.value)
         }
@@ -181,7 +182,7 @@ abstract class ParaboxService : LifecycleService() {
             true,
             metadata
         )
-        onRefresh()
+        onRefreshMessage()
     }
 
     private fun sendStateResponse(metadata: ParaboxMetadata) {
@@ -421,8 +422,8 @@ abstract class ParaboxService : LifecycleService() {
                                     recallMessage(metadata, messageId)
                                 }
 
-                                ParaboxKey.COMMAND_GET_UNRECEIVED_MESSAGE -> {
-                                    getUnreceivedMessage(metadata)
+                                ParaboxKey.COMMAND_REFRESH_MESSAGE -> {
+                                    refreshMessage(metadata)
                                 }
 
                                 ParaboxKey.COMMAND_GET_STATE -> {
@@ -486,8 +487,12 @@ abstract class ParaboxService : LifecycleService() {
 
                 }
 
-                ParaboxKey.TYPE_WELCOME_TEXT -> {
-
+                ParaboxKey.TYPE_NOTIFICATION -> {
+                    when(msg.what){
+                        ParaboxKey.NOTIFICATION_MAIN_APP_LAUNCH -> {
+                            onMainAppLaunch()
+                        }
+                    }
                 }
             }
         }
