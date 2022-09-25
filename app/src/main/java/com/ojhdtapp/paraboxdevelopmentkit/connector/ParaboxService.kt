@@ -17,7 +17,7 @@ abstract class ParaboxService : LifecycleService() {
     private var clientMessenger: Messenger? = null
     private var mainAppMessenger: Messenger? = null
 
-    private val deferredMap = mutableMapOf<Long, CompletableDeferred<ParaboxResult>>()
+    private val deferredMap = mutableMapOf<String, CompletableDeferred<ParaboxResult>>()
     private val messageUnreceivedMap = mutableMapOf<Long, ReceiveMessageDto>()
 
     abstract fun onStartParabox()
@@ -218,7 +218,7 @@ abstract class ParaboxService : LifecycleService() {
                 errorCode = errorCode!!
             )
         }.also {
-            deferredMap[metadata.timestamp]?.complete(it)
+            deferredMap[metadata.key]?.complete(it)
 //            coreSendCommandResponse(isSuccess, metadata, it)
         }
     }
@@ -283,17 +283,18 @@ abstract class ParaboxService : LifecycleService() {
     ) {
         lifecycleScope.launch {
             val timestamp = System.currentTimeMillis()
+            val key = "${timestamp}${ParaboxUtil.getRandomNumStr(8)}"
             try {
                 withTimeout(timeoutMillis) {
                     val deferred = CompletableDeferred<ParaboxResult>()
-                    deferredMap[timestamp] = deferred
-                    coreSendRequest(timestamp, request, client, extra)
+                    deferredMap[key] = deferred
+                    coreSendRequest(timestamp, key, request, client, extra)
                     deferred.await().also {
                         onResult(it)
                     }
                 }
             } catch (e: TimeoutCancellationException) {
-                deferredMap[timestamp]?.cancel()
+                deferredMap[key]?.cancel()
                 onResult(
                     ParaboxResult.Fail(
                         request,
@@ -302,7 +303,7 @@ abstract class ParaboxService : LifecycleService() {
                     )
                 )
             } catch (e: RemoteException) {
-                deferredMap[timestamp]?.cancel()
+                deferredMap[key]?.cancel()
                 onResult(
                     ParaboxResult.Fail(
                         request,
@@ -316,6 +317,7 @@ abstract class ParaboxService : LifecycleService() {
 
     private fun coreSendRequest(
         timestamp: Long,
+        key: String,
         request: Int,
         client: Int,
         extra: Bundle = Bundle()
@@ -326,7 +328,7 @@ abstract class ParaboxService : LifecycleService() {
             else -> null
         }
         if (targetClient == null) {
-            deferredMap[timestamp]?.complete(
+            deferredMap[key]?.complete(
                 ParaboxResult.Fail(
                     request, timestamp,
                     ParaboxKey.ERROR_DISCONNECTED
@@ -338,7 +340,8 @@ abstract class ParaboxService : LifecycleService() {
                     "metadata", ParaboxMetadata(
                         commandOrRequest = request,
                         timestamp = timestamp,
-                        sender = ParaboxKey.CLIENT_SERVICE
+                        sender = ParaboxKey.CLIENT_SERVICE,
+                        key = key
                     )
                 )
             }).apply {
@@ -390,7 +393,7 @@ abstract class ParaboxService : LifecycleService() {
                                 }
                             val deferred =
                                 CompletableDeferred<ParaboxResult>()
-                            deferredMap[metadata.timestamp] = deferred
+                            deferredMap[metadata.key] = deferred
 
                             // 指令种类判断
                             when (msg.what) {
@@ -475,7 +478,7 @@ abstract class ParaboxService : LifecycleService() {
                                 errorCode = errorCode
                             )
                         }
-                        deferredMap[metadata.timestamp]?.complete(result)
+                        deferredMap[metadata.key]?.complete(result)
                     } catch (e: NullPointerException) {
                         e.printStackTrace()
                     } catch (e: ClassNotFoundException) {

@@ -21,7 +21,7 @@ abstract class ParaboxActivity<T>(private val serviceClass: Class<T>) : Componen
     private lateinit var client: Messenger
     private lateinit var paraboxServiceConnection: ServiceConnection
 
-    var deferredMap = mutableMapOf<Long, CompletableDeferred<ParaboxResult>>()
+    var deferredMap = mutableMapOf<String, CompletableDeferred<ParaboxResult>>()
 
     /*/
     推荐于onStart运行
@@ -64,17 +64,18 @@ abstract class ParaboxActivity<T>(private val serviceClass: Class<T>) : Componen
     ) {
         lifecycleScope.launch {
             val timestamp = System.currentTimeMillis()
+            val key = "${timestamp}${ParaboxUtil.getRandomNumStr(8)}"
             try {
                 withTimeout(timeoutMillis) {
                     val deferred = CompletableDeferred<ParaboxResult>()
-                    deferredMap[timestamp] = deferred
-                    coreSendCommand(timestamp, command, extra)
+                    deferredMap[key] = deferred
+                    coreSendCommand(timestamp, key, command, extra)
                     deferred.await().also {
                         onResult(it)
                     }
                 }
             } catch (e: TimeoutCancellationException) {
-                deferredMap[timestamp]?.cancel()
+                deferredMap[key]?.cancel()
                 onResult(
                     ParaboxResult.Fail(
                         command,
@@ -83,7 +84,7 @@ abstract class ParaboxActivity<T>(private val serviceClass: Class<T>) : Componen
                     )
                 )
             } catch (e: RemoteException) {
-                deferredMap[timestamp]?.cancel()
+                deferredMap[key]?.cancel()
                 onResult(
                     ParaboxResult.Fail(
                         command,
@@ -101,9 +102,9 @@ abstract class ParaboxActivity<T>(private val serviceClass: Class<T>) : Componen
     arg2: 指令类型
     obj: Bundle
      */
-    private fun coreSendCommand(timestamp: Long, command: Int, extra: Bundle = Bundle()) {
+    private fun coreSendCommand(timestamp: Long, key: String, command: Int, extra: Bundle = Bundle()) {
         if (paraboxService == null) {
-            deferredMap[timestamp]?.complete(
+            deferredMap[key]?.complete(
                 ParaboxResult.Fail(
                     command, timestamp,
                     ParaboxKey.ERROR_DISCONNECTED
@@ -120,7 +121,8 @@ abstract class ParaboxActivity<T>(private val serviceClass: Class<T>) : Componen
                         "metadata", ParaboxMetadata(
                             commandOrRequest = command,
                             timestamp = timestamp,
-                            sender = ParaboxKey.CLIENT_CONTROLLER
+                            sender = ParaboxKey.CLIENT_CONTROLLER,
+                            key = key
                         )
                     )
                 }).apply {
@@ -149,7 +151,7 @@ abstract class ParaboxActivity<T>(private val serviceClass: Class<T>) : Componen
                 errorCode = errorCode!!
             )
         }.also {
-            deferredMap[metadata.timestamp]?.complete(it)
+            deferredMap[metadata.key]?.complete(it)
 //            coreSendCommandResponse(isSuccess, metadata, it)
         }
     }
@@ -211,7 +213,7 @@ abstract class ParaboxActivity<T>(private val serviceClass: Class<T>) : Componen
                                 }
                             val deferred =
                                 CompletableDeferred<ParaboxResult>()
-                            deferredMap[metadata.timestamp] = deferred
+                            deferredMap[metadata.key] = deferred
 
                             // 指令种类判断
                             when (msg.what) {
@@ -260,7 +262,7 @@ abstract class ParaboxActivity<T>(private val serviceClass: Class<T>) : Componen
                                 errorCode = errorCode
                             )
                         }
-                        deferredMap[metadata.timestamp]?.complete(result)
+                        deferredMap[metadata.key]?.complete(result)
                     } catch (e: NullPointerException) {
                         e.printStackTrace()
                     } catch (e: ClassNotFoundException) {
