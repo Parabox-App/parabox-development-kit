@@ -11,8 +11,6 @@ android {
     defaultConfig {
         minSdk 24
         targetSdk 33
-        versionCode 1
-        versionName "1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -43,6 +41,6 @@ dependencies {
 ext {
     PUBLISH_GROUP_ID = 'com.ojhdt'
     PUBLISH_ARTIFACT_ID = 'parabox-development-kit'
-    PUBLISH_VERSION = '1.0.2-SNAPSHOT'
+    PUBLISH_VERSION = '1.0.7-SNAPSHOT'
 }
 apply from: "${rootProject.projectDir}/publish-mavencentral.gradle"

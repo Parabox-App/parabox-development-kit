@@ -11,10 +11,47 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 
+/**
+ * 与ParaboxService通信的抽象Activity
+ * @param T ParaboxService实现类泛型
+ * @param serviceClass ParaboxService实现类Class
+ * @see ParaboxService
+ * @since 1.0.0
+ */
 abstract class ParaboxActivity<T>(private val serviceClass: Class<T>) : ComponentActivity() {
+    /**
+     * 与主端建立连接时调用
+     * @since 1.0.0
+    */
     abstract fun onParaboxServiceConnected()
+
+    /**
+     * 与主端断开连接时调用
+     * @since 1.0.0
+    */
     abstract fun onParaboxServiceDisconnected()
+    /**
+       * 核心服务状态变化时调用。
+     * @param state 核心服务状态。预定义状态可参考 [ParaboxKey]
+     * @param message 附加信息，可用于 toast 提示。使用 [getState] 获取状态时为 Null
+     * @since 1.0.0
+     * @see ParaboxKey
+     * @see getState
+     */
     abstract fun onParaboxServiceStateChanged(state: Int, message: String?)
+    /**
+     * msg.what未匹配预定义Key时屌用，用于自定义Request，Notification。
+     *
+     * 具体可参阅 https://docs.parabox.ojhdt.dev/developer/#command
+     * @param msg 从核心服务接收到的消息。
+     * - msg.what 预定义Key
+     * - msg.arg1 发送客户端类型，必定为SERVICE
+     * - msg.arg2 消息类型，可选值为REQUEST，COMMAND或NOTIFICATION
+     * - msg.obj 附加信息，可转换为Bundle类型
+     * @param metadata 消息元数据。
+     * @since 1.0.0
+     * @see ParaboxKey
+     */
     abstract fun customHandleMessage(msg: Message, metadata: ParaboxMetadata)
 
     var paraboxService: Messenger? = null
@@ -23,8 +60,9 @@ abstract class ParaboxActivity<T>(private val serviceClass: Class<T>) : Componen
 
     var deferredMap = mutableMapOf<String, CompletableDeferred<ParaboxResult>>()
 
-    /*/
-    推荐于onStart运行
+    /**
+     * 与核心服务连接。建议于 onStart 调用
+     * @since 1.0.0
      */
     fun bindParaboxService() {
         val intent = Intent(this, serviceClass)
@@ -35,15 +73,71 @@ abstract class ParaboxActivity<T>(private val serviceClass: Class<T>) : Componen
         )
     }
 
-    /*/
-    推荐于onStop执行
+    /**
+     * 与核心服务断开连接。建议于 onStop 调用
+     * @since 1.0.0
      */
-    fun stopParaboxService() {
+    fun unbindParaboxService() {
         if (paraboxService != null) {
             unbindService(paraboxServiceConnection)
         }
     }
 
+    /**
+     * 预定义COMMAND，用于启动核心服务。将触发 [ParaboxService.onStartParabox] 回调。
+     *
+     * 仅核心服务状态为 STOP 时有效
+     * @param onResult 结果回调，于 [sendCommand] 超时或核心服务返回结果时调用
+     * @since 1.0.0
+     * @see ParaboxService.onStartParabox
+     * @see ParaboxResult
+     * @see ParaboxKey
+     * @see sendCommand
+     */
+    fun startParaboxService(onResult: (ParaboxResult) -> Unit) {
+        sendCommand(
+            command = ParaboxKey.COMMAND_START_SERVICE,
+            onResult = onResult
+        )
+    }
+    /**
+     * 预定义COMMAND，用于停止核心服务。将触发 [ParaboxService.onStopParabox] 回调。
+     *
+     * 仅核心服务状态为 RUNNING 时有效
+     * @param onResult 结果回调，于 [sendCommand] 超时或核心服务返回结果时调用
+     * @since 1.0.0
+     * @see ParaboxService.onStopParabox
+     * @see ParaboxResult
+     * @see ParaboxKey
+     * @see sendCommand
+     */
+    fun stopParaboxService(onResult: (ParaboxResult) -> Unit) {
+        sendCommand(
+            command = ParaboxKey.COMMAND_STOP_SERVICE,
+            onResult = onResult,
+        )
+    }
+    /**
+     * 预定义COMMAND，用于停止核心服务。将触发 [ParaboxService.onStopParabox] 回调，无视核心服务状态
+     * @param onResult 结果回调，于 [sendCommand] 超时或核心服务返回结果时调用
+     * @since 1.0.0
+     * @see ParaboxService.onStopParabox
+     * @see ParaboxResult
+     * @see ParaboxKey
+     * @see sendCommand
+     */
+    fun forceStopParaboxService(onResult: (ParaboxResult) -> Unit) {
+        sendCommand(
+            command = ParaboxKey.COMMAND_FORCE_STOP_SERVICE,
+            onResult = onResult
+        )
+    }
+
+    /**
+     * 预定义COMMAND，用于获取核心服务状态。将触发 [onParaboxServiceStateChanged] 回调
+     * @since 1.0.0
+     * @see sendCommand
+     */
     fun getState() {
         sendCommand(
             command = ParaboxKey.COMMAND_GET_STATE,
@@ -56,6 +150,20 @@ abstract class ParaboxActivity<T>(private val serviceClass: Class<T>) : Componen
         )
     }
 
+    /**
+     * 向ParaboxService发送一条命令（COMMAND）。常用于需要确定得到回复才能继续进行的逻辑。如消息发送/接收，更新配置等。
+     *
+     * 自带回送验证及超时机制。保证每一次通信都必然在超时时间内触发 onResult 回调。
+     *
+     * 如需自定义Command，可参阅 https://docs.parabox.ojhdt.dev/developer/#command
+     * @param command 命令类型
+     * @param extra 附加数据,将作为Message的obj传递
+     * @param timeoutMillis 触发超时的时间，单位为毫秒
+     * @param onResult 结果回调，超时或核心服务返回结果时调用
+     * @since 1.0.0
+     * @see ParaboxResult
+     * @see ParaboxKey
+     */
     fun sendCommand(
         command: Int,
         extra: Bundle = Bundle(),
@@ -102,7 +210,17 @@ abstract class ParaboxActivity<T>(private val serviceClass: Class<T>) : Componen
     arg2: 指令类型
     obj: Bundle
      */
-    private fun coreSendCommand(timestamp: Long, key: String, command: Int, extra: Bundle = Bundle()) {
+    /**
+     * command 较底层实现。请勿直接调用
+     * @since 1.0.0
+     * @see sendCommand
+     */
+    private fun coreSendCommand(
+        timestamp: Long,
+        key: String,
+        command: Int,
+        extra: Bundle = Bundle()
+    ) {
         if (paraboxService == null) {
             deferredMap[key]?.complete(
                 ParaboxResult.Fail(
@@ -132,6 +250,20 @@ abstract class ParaboxActivity<T>(private val serviceClass: Class<T>) : Componen
         }
     }
 
+    /**
+     * 发送 REQUEST 的回送验证。
+     *
+     * 对于自定义 REQUEST，务必在处理 REQUEST 后调用，否则将导致原 REQUEST 超时。
+     *
+     * 可参阅 https://docs.parabox.ojhdt.dev/developer/#_10 获取有关通讯机制的更多信息
+     * @param isSuccess 本次Request是否正常处理
+     * @param metadata 消息元数据
+     * @param extra 附加数据，isSuccess 为 true 时，作为 ParaboxResult.Success 的 obj 传递
+     * @param errorCode 错误码，isSuccess 为 false 时，作为 ParaboxResult.Fail 的 errorCode 传递
+     * @since 1.0.0
+     * @see ParaboxService.sendRequest
+     * @see ParaboxResult
+     */
     fun sendRequestResponse(
         isSuccess: Boolean,
         metadata: ParaboxMetadata,
@@ -140,13 +272,13 @@ abstract class ParaboxActivity<T>(private val serviceClass: Class<T>) : Componen
     ) {
         if (isSuccess) {
             ParaboxResult.Success(
-                command = metadata.commandOrRequest,
+                commandOrRequest = metadata.commandOrRequest,
                 timestamp = metadata.timestamp,
                 obj = extra,
             )
         } else {
             ParaboxResult.Fail(
-                command = metadata.commandOrRequest,
+                commandOrRequest = metadata.commandOrRequest,
                 timestamp = metadata.timestamp,
                 errorCode = errorCode!!
             )
@@ -156,6 +288,11 @@ abstract class ParaboxActivity<T>(private val serviceClass: Class<T>) : Componen
         }
     }
 
+    /**
+     * request 的较底层实现，请勿直接调用
+     * @since 1.0.0
+     * @see sendRequestResponse
+     */
     private fun coreSendRequestResponse(
         isSuccess: Boolean,
         metadata: ParaboxMetadata,
@@ -251,13 +388,13 @@ abstract class ParaboxActivity<T>(private val serviceClass: Class<T>) : Componen
                         val errorCode = obj.getInt("errorCode")
                         val result = if (isSuccess) {
                             ParaboxResult.Success(
-                                command = metadata.commandOrRequest,
+                                commandOrRequest = metadata.commandOrRequest,
                                 timestamp = metadata.timestamp,
                                 obj = obj
                             )
                         } else {
                             ParaboxResult.Fail(
-                                command = metadata.commandOrRequest,
+                                commandOrRequest = metadata.commandOrRequest,
                                 timestamp = metadata.timestamp,
                                 errorCode = errorCode
                             )

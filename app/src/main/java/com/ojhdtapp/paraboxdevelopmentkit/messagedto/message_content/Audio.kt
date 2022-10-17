@@ -4,6 +4,14 @@ import android.net.Uri
 import kotlinx.parcelize.IgnoredOnParcel
 import kotlinx.parcelize.Parcelize
 
+/**
+ * 语音消息类型
+ * @param url 语音文件URL
+ * @param length 语音长度
+ * @param fileName 语音文件名
+ * @param fileSize 语音文件大小
+ * @param uri 语音文件URI。需授予权限才可供主端使用
+ */
 @Parcelize
 data class Audio(
     val url: String? = null,
