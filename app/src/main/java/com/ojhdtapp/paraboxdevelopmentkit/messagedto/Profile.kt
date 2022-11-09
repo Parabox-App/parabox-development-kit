@@ -1,5 +1,6 @@
 package com.ojhdtapp.paraboxdevelopmentkit.messagedto
 
+import android.net.Uri
 import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
 
@@ -13,5 +14,6 @@ import kotlinx.parcelize.Parcelize
 data class Profile(
     val name: String,
     val avatar: String?,
-    val id: Long?
+    val id: Long?,
+    val avatarUri: Uri?
 ) : Parcelable

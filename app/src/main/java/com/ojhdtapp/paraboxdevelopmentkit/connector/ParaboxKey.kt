@@ -25,6 +25,7 @@ object ParaboxKey {
     // 指定通知类型
     const val NOTIFICATION_STATE_UPDATE = 2556520
     const val NOTIFICATION_MAIN_APP_LAUNCH = 2556521
+    const val NOTIFICATION_UPLOAD_FILE_PROGRESS = 2556522
     // 指定请求类型
     const val REQUEST_RECEIVE_MESSAGE = 2556530
     // 指定错误类型
