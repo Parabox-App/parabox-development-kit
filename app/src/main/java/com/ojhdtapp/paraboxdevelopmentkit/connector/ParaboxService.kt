@@ -28,6 +28,7 @@ abstract class ParaboxService : LifecycleService() {
 
     private val deferredMap = mutableMapOf<String, CompletableDeferred<ParaboxResult>>()
     private val messageUnreceivedMap = mutableMapOf<Long, ReceiveMessageDto>()
+    private val messageUnsyncedMap = mutableMapOf<Long, SendMessageDto>()
 
     /**
      * 启动核心服务
@@ -250,6 +251,37 @@ abstract class ParaboxService : LifecycleService() {
             })
     }
 
+    /**
+     * 向 Parabox 主端数据库同步一条已发送的消息。（使主端新增一条已完成的发送记录）。
+     *
+     * @param dto 待同步消息传输对象
+     * @param onResult 结果回调
+     * @since 1.0.6
+     * @see SendMessageDto
+     * @see ParaboxResult
+     */
+    fun syncMessage(
+        dto: SendMessageDto,
+        onResult: (ParaboxResult) -> Unit
+    ){
+        sendRequest(request = ParaboxKey.REQUEST_SYNC_MESSAGE,
+            client = ParaboxKey.CLIENT_MAIN_APP,
+            extra = Bundle().apply {
+                putParcelable("dto", dto)
+            },
+            timeoutMillis = 6000,
+            onResult = {
+                onResult(it)
+                dto.messageId?.let { id ->
+                    if (it is ParaboxResult.Fail) {
+                        messageUnsyncedMap[id] = dto
+                    } else {
+                        messageUnsyncedMap.remove(id)
+                    }
+                }
+            })
+    }
+
     private fun sendMessage(metadata: ParaboxMetadata, dto: SendMessageDto) {
         lifecycleScope.launch {
             if (serviceState == ParaboxKey.STATE_RUNNING) {
@@ -305,6 +337,9 @@ abstract class ParaboxService : LifecycleService() {
     private fun refreshMessage(metadata: ParaboxMetadata) {
         messageUnreceivedMap.forEach {
             receiveMessage(it.value) {}
+        }
+        messageUnsyncedMap.forEach {
+            syncMessage(it.value) {}
         }
         sendCommandResponse(
             true,

@@ -28,6 +28,7 @@ object ParaboxKey {
     const val NOTIFICATION_UPLOAD_FILE_PROGRESS = 2556522
     // 指定请求类型
     const val REQUEST_RECEIVE_MESSAGE = 2556530
+    const val REQUEST_SYNC_MESSAGE = 2556531
     // 指定错误类型
     const val ERROR_TIMEOUT = 2556560
     const val ERROR_DISCONNECTED = 2556561
